@@ -1,8 +1,9 @@
 # Disk Scheduling Simulator
 
 An interactive, browser-based simulator for the classic disk scheduling algorithms
-taught in Operating Systems courses. Watch the disk head move across the platter,
-then compare every algorithm on the same request queue.
+taught in Operating Systems courses. Build a request queue by clicking on the disk
+map, watch the disk head move across the platter, read a step-by-step explanation of
+every move, and compare all six algorithms on the same queue.
 
 ![HTML](https://img.shields.io/badge/built%20with-vanilla%20HTML%2FCSS%2FJS-blue)
 
@@ -19,12 +20,25 @@ then compare every algorithm on the same request queue.
 
 ## Features
 
+- **Interactive disk map** - click the track to add a request, click a dot to
+  remove it, and drag the HEAD marker to set the initial head position. The map
+  and the input fields stay in sync both ways.
 - Animated disk-head movement plotted the way textbooks draw it
   (cylinder number on the x-axis, service order on the y-axis)
-- Play / pause, step forward / back, restart and speed control
-- Total head movement, average seek length and full seek order for every run
+- **"Why" narration** - a plain-English sentence explains every move while the
+  animation runs ("the closest pending request is 65 - move 2 cylinders left")
+- **Trace table** - every step with from, to, seek distance and running total,
+  exactly the working you write in an exam. Click a row to jump the animation
+  to that step; the current row highlights as the head moves
+- Play / pause, step forward / back, a **timeline scrubber**, restart and speed
+  control. Keyboard: space = play/pause, arrow keys = step
+- **Hover any plotted point** to inspect it (step number, cylinder, seek
+  distance); click it to jump straight there
 - One-click **comparison of all six algorithms** on the same queue, with a bar
-  chart and the best performer highlighted
+  chart and the best performer highlighted - click any row to watch that
+  algorithm run
+- **Textbook example button** restores the classic Silberschatz queue
+  `98, 183, 37, 122, 14, 124, 65, 67` with head at 53
 - Random queue generator, custom queue input, configurable disk size,
   initial head position and sweep direction
 - Shareable demo links: add `#demo=compare` or `#demo=run&algo=SCAN` to the URL
@@ -54,13 +68,16 @@ and open <http://localhost:8000> in your browser.
 
 ## How to use
 
-1. Set the **disk size** (cylinders are numbered `0` to `disk size`).
-2. Set the **initial head position**.
-3. Type the **request queue**, e.g. `98, 183, 37, 122, 14, 124, 65, 67`
-   (or press *Random queue*).
-4. Pick an **algorithm** and press **Run algorithm** to watch the head move.
-5. Press **Compare all algorithms** to see every algorithm's total head
-   movement and average seek length on the same queue.
+1. Click on the **disk map** to place requests (or type them into the queue
+   box, press *Textbook example* or *Random queue*). Drag the HEAD marker to
+   the starting cylinder.
+2. Pick an **algorithm** - a one-line explanation of how it works appears
+   under the dropdown.
+3. Press **Run algorithm**. Press space to pause, then step with the arrow
+   keys or drag the scrubber. The "why" line and the trace table explain each
+   move as it happens.
+4. Press **Compare all algorithms** to see every algorithm's total head
+   movement on the same queue. Click any row to watch that algorithm animate.
 
 ## Example
 
