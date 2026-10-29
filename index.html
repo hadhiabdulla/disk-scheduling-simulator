@@ -47,8 +47,22 @@
   button.green:hover{filter:brightness(1.12);}
   button:disabled{opacity:.45; cursor:default;}
   canvas{width:100%; display:block; border-radius:8px; background:var(--panel2);}
+  canvas#diskCanvas{cursor:pointer; touch-action:none;}
+  canvas#simCanvas{cursor:crosshair;}
   .playback{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px;}
   .playback .spd{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.82rem;}
+  .scrubRow{display:flex; align-items:center; gap:10px; margin-top:12px; color:var(--muted); font-size:.8rem;}
+  .scrubRow input{flex:1; accent-color:var(--accent);}
+  .canvaswrap{position:relative;}
+  .tooltip{
+    position:absolute; pointer-events:none; display:none; z-index:5;
+    background:#0d1117; border:1px solid var(--border); border-radius:6px;
+    padding:4px 8px; font:11px Consolas,monospace; color:var(--text); white-space:nowrap;
+  }
+  .why{
+    margin-top:12px; background:var(--panel2); border-left:3px solid var(--accent);
+    border-radius:6px; padding:10px 12px; font-size:.88rem; line-height:1.45; min-height:1.2em;
+  }
   .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:16px;}
   .stat{background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px 14px;}
   .stat .k{font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px;}
@@ -64,6 +78,9 @@
   th{color:var(--muted); font-size:.76rem; text-transform:uppercase; letter-spacing:.6px;}
   td.num,th.num{text-align:right; font-variant-numeric:tabular-nums;}
   tr.best td{color:var(--accent2); font-weight:600;}
+  tbody tr.clickable{cursor:pointer;}
+  tbody tr.clickable:hover td{background:#ffffff08;}
+  tr.current td{background:#1f6feb2e;}
   .algoswatch{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:8px;}
   .err{color:var(--danger); font-size:.85rem; margin-top:10px; display:none;}
   .hint{color:var(--muted); font-size:.8rem; margin-top:10px;}
@@ -93,7 +110,7 @@
         <label>Initial direction (SCAN / LOOK family)</label>
         <select id="direction">
           <option value="right">Right (towards higher cylinders)</option>
-          <option value="left">Left (towards cylinder 0)</option>
+          <option value="left" selected>Left (towards cylinder 0)</option>
         </select>
       </div>
       <div class="field">
@@ -106,24 +123,35 @@
           <option>LOOK</option>
           <option>C-LOOK</option>
         </select>
+        <div class="hint" id="algoDesc"></div>
       </div>
       <div class="field queue-field">
         <label>Request queue (comma or space separated cylinder numbers)</label>
         <input id="queue" type="text" value="98, 183, 37, 122, 14, 124, 65, 67" spellcheck="false">
       </div>
     </div>
+
+    <div style="margin-top:16px;">
+      <label style="display:block; font-size:.8rem; color:var(--muted); margin-bottom:5px;">Disk map - click the track to add a request, click a dot to remove it, drag the head marker below the track</label>
+      <canvas id="diskCanvas" height="110"></canvas>
+    </div>
+
     <div class="btns">
+      <button id="presetBtn">Textbook example</button>
       <button id="randomBtn">Random queue</button>
       <button id="runBtn" class="primary">Run algorithm</button>
       <button id="compareBtn" class="green">Compare all algorithms</button>
     </div>
     <div class="err" id="errMsg"></div>
-    <div class="hint">Tip: the graph plots cylinder number (x-axis) against service order (y-axis), exactly like the textbook diagrams.</div>
+    <div class="hint">Tip: the graph plots cylinder number (x-axis) against service order (y-axis), exactly like the textbook diagrams. Hover any point to inspect it, click it to jump there. Keyboard: space = play/pause, arrow keys = step.</div>
   </div>
 
   <div class="card" id="simCard" style="display:none;">
     <h2 id="simTitle">Simulation</h2>
-    <canvas id="simCanvas" height="380"></canvas>
+    <div class="canvaswrap">
+      <canvas id="simCanvas" height="380"></canvas>
+      <div class="tooltip" id="simTip"></div>
+    </div>
     <div class="playback">
       <button id="playBtn">Pause</button>
       <button id="prevBtn">&larr; Step</button>
@@ -131,6 +159,10 @@
       <button id="restartBtn">Restart</button>
       <div class="spd">Speed <input id="speed" type="range" min="1" max="10" value="4"></div>
     </div>
+    <div class="scrubRow">
+      Step <input id="scrub" type="range" min="0" max="1" value="0"> <span id="scrubLabel">0 / 0</span>
+    </div>
+    <div class="why" id="whyLine"></div>
     <div class="stats">
       <div class="stat"><div class="k">Total head movement</div><div class="v" id="statTotal">-</div></div>
       <div class="stat"><div class="k">Requests served</div><div class="v" id="statReq">-</div></div>
@@ -138,6 +170,15 @@
       <div class="stat"><div class="k">Current cylinder</div><div class="v" id="statCur">-</div></div>
     </div>
     <div class="seq" id="seqLine"></div>
+    <div style="overflow-x:auto;">
+    <table id="traceTable">
+      <thead>
+        <tr><th>Step</th><th>From</th><th>To</th><th class="num">Seek distance</th><th class="num">Running total</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <div class="hint">The trace table is exactly what you write in the exam: every move, its seek distance and the running total. Click a row to jump the animation to that step.</div>
   </div>
 
   <div class="card" id="cmpCard" style="display:none;">
@@ -151,15 +192,15 @@
       <tbody></tbody>
     </table>
     </div>
-    <div class="hint">Green row = lowest total head movement for this queue. C-SCAN / C-LOOK counts the return sweep to the far end as movement, as in the standard textbook convention.</div>
+    <div class="hint">Green row = lowest total head movement for this queue. Click any row to watch that algorithm run. C-SCAN / C-LOOK counts the return sweep to the far end as movement, as in the standard textbook convention.</div>
   </div>
 
   <footer>Operating Systems mini project &middot; Disk Scheduling Simulator</footer>
 </div>
-
 <script>
 "use strict";
 
+/* === ALGOS START === */
 /* ---------------- disk scheduling algorithms ----------------
    Each returns { seq:[...], total:number }.
    seq always starts at the initial head position; every later
@@ -184,18 +225,24 @@ function sstf(reqs, head){
   return {seq, total:movement(seq)};
 }
 
+/* push a disk-end marker unless the head is already there
+   (avoids zero-distance duplicate steps when a request sits at the end) */
+function pushEnd(seq, end){
+  if(seq[seq.length-1]!==end) seq.push(end);
+}
+
 function scan(reqs, head, maxCyl, dir){
   const left=reqs.filter(r=>r<head).sort((a,b)=>b-a);   // descending
   const right=reqs.filter(r=>r>=head).sort((a,b)=>a-b); // ascending
   let seq;
   if(dir==="right"){
     seq=[head,...right];
-    if(left.length){ seq.push(maxCyl, ...left); }       // sweep to the top end, then back
-    else if(right.length){ seq.push(maxCyl); }
+    if(left.length||right.length) pushEnd(seq, maxCyl); // sweep to the top end
+    if(left.length) seq.push(...left);                  // then back
   }else{
     seq=[head,...left];
-    if(right.length){ seq.push(0, ...right); }          // sweep to cylinder 0, then back
-    else if(left.length){ seq.push(0); }
+    if(left.length||right.length) pushEnd(seq, 0);      // sweep to cylinder 0
+    if(right.length) seq.push(...right);                // then back
   }
   return {seq, total:movement(seq)};
 }
@@ -206,11 +253,19 @@ function cscan(reqs, head, maxCyl, dir){
   let seq;
   if(dir==="right"){
     seq=[head,...right];
-    if(left.length) seq.push(maxCyl, 0, ...left);       // jump back to 0, keep going right
+    if(left.length){
+      pushEnd(seq, maxCyl);                             // sweep to the top end
+      pushEnd(seq, 0);                                  // jump back to 0
+      seq.push(...left);                                // keep going right
+    }
   }else{
     const leftDesc=reqs.filter(r=>r<head).sort((a,b)=>b-a);
     seq=[head,...leftDesc];
-    if(right.length) seq.push(0, maxCyl, ...right.slice().reverse());
+    if(right.length){
+      pushEnd(seq, 0);                                  // sweep to cylinder 0
+      pushEnd(seq, maxCyl);                             // jump to the top end
+      seq.push(...right.slice().reverse());             // keep going left
+    }
   }
   return {seq, total:movement(seq)};
 }
@@ -236,13 +291,54 @@ function movement(seq){
 }
 
 const ALGOS={
-  "FCFS":   {fn:(r,h)=>fcfs(r,h),                 color:"#58a6ff"},
-  "SSTF":   {fn:(r,h)=>sstf(r,h),                 color:"#3fb950"},
-  "SCAN":   {fn:(r,h,m,d)=>scan(r,h,m,d),         color:"#d29922"},
-  "C-SCAN": {fn:(r,h,m,d)=>cscan(r,h,m,d),        color:"#f778ba"},
-  "LOOK":   {fn:(r,h,m,d)=>look(r,h,d),           color:"#a371f7"},
-  "C-LOOK": {fn:(r,h,m,d)=>clook(r,h,d),          color:"#ffa657"},
+  "FCFS":   {fn:(r,h)=>fcfs(r,h),                 color:"#58a6ff",
+             desc:"Services requests in arrival order. Simple and fair, but the head can travel far."},
+  "SSTF":   {fn:(r,h)=>sstf(r,h),                 color:"#3fb950",
+             desc:"Always picks the nearest request. Low total movement, but far requests can starve."},
+  "SCAN":   {fn:(r,h,m,d)=>scan(r,h,m,d),         color:"#d29922",
+             desc:"The elevator algorithm: sweeps to the end of the disk, then reverses."},
+  "C-SCAN": {fn:(r,h,m,d)=>cscan(r,h,m,d),        color:"#f778ba",
+             desc:"Like SCAN, but services in one direction only and jumps back to the far end."},
+  "LOOK":   {fn:(r,h,m,d)=>look(r,h,d),           color:"#a371f7",
+             desc:"Like SCAN, but reverses at the last request instead of the disk end."},
+  "C-LOOK": {fn:(r,h,m,d)=>clook(r,h,d),          color:"#ffa657",
+             desc:"Like C-SCAN, but jumps from the last request straight to the first."},
 };
+
+/* Plain-English explanation of one head move (transition i: seq[i] -> seq[i+1]).
+   Used by the "why" narration line under the simulator. Pure function. */
+function narrate(name, reqs, seq, maxCyl, i, dir){
+  const from=seq[i], to=seq[i+1], d=Math.abs(to-from), k=i+1;
+  const dirW = to>from ? "right" : "left";
+  const isEnd = (to===0||to===maxCyl) && !reqs.includes(to);
+  const prevDelta = i>0 ? seq[i]-seq[i-1] : 0;
+  const reversed = prevDelta!==0 && (to-from)!==0 && Math.sign(to-from)!==Math.sign(prevDelta);
+  if(d===0) return "Step "+k+": the head is already at cylinder "+to+" - no movement needed.";
+  switch(name){
+    case "FCFS":
+      return "Step "+k+": cylinder "+to+" is next in the arrival order - move "+d+" cylinders "+dirW+".";
+    case "SSTF":
+      return "Step "+k+": from "+from+", the closest pending request is "+to+" - move "+d+" cylinders "+dirW+".";
+    case "SCAN":
+      if(isEnd)
+        return "Step "+k+": no more requests in this direction, so the head sweeps on to the end of the disk ("+to+"), "+d+" cylinders, then reverses.";
+      return "Step "+k+": sweeping "+dirW+", the next request in this direction is "+to+" - move "+d+" cylinders."+(reversed?" The head has reversed direction.":"");
+    case "C-SCAN":
+      if((from===0&&to===maxCyl)||(from===maxCyl&&to===0))
+        return "Step "+k+": the end of the disk is reached, so the head jumps back to cylinder "+to+" ("+d+" cylinders, counted as movement) and keeps sweeping the same way.";
+      if(isEnd)
+        return "Step "+k+": the sweep continues to the end of the disk ("+to+") - "+d+" cylinders.";
+      return "Step "+k+": sweeping "+dirW+", the next request is "+to+" - move "+d+" cylinders.";
+    case "LOOK":
+      return "Step "+k+": "+(reversed?"no more requests ahead, so the head reverses; ":"")+"the next request "+dirW+" is "+to+" - move "+d+" cylinders.";
+    case "C-LOOK":
+      if(Math.sign(to-from)!==(dir==="right"?1:-1))
+        return "Step "+k+": no more requests ahead - the head jumps to the "+(dir==="right"?"lowest":"highest")+" pending request ("+to+"), "+d+" cylinders counted as movement.";
+      return "Step "+k+": sweeping "+dirW+", the next request is "+to+" - move "+d+" cylinders.";
+  }
+  return "Step "+k+": move from "+from+" to "+to+" ("+d+" cylinders).";
+}
+/* === ALGOS END === */
 
 /* ---------------- input handling ---------------- */
 const $=id=>document.getElementById(id);
@@ -265,13 +361,26 @@ function readInputs(){
   return {reqs, head, maxCyl, dir};
 }
 
+$("presetBtn").onclick=()=>{
+  $("diskSize").value=199;
+  $("headStart").value=53;
+  $("direction").value="left";
+  $("queue").value="98, 183, 37, 122, 14, 124, 65, 67";
+  drawStrip();
+};
+
 $("randomBtn").onclick=()=>{
   const maxCyl=parseInt($("diskSize").value,10)||199;
   const n=8, set=new Set();
   while(set.size<n) set.add(Math.floor(Math.random()*(maxCyl+1)));
   $("queue").value=[...set].join(", ");
   $("headStart").value=Math.floor(Math.random()*(maxCyl+1));
+  drawStrip();
 };
+
+/* algorithm description under the select */
+function updateAlgoDesc(){ $("algoDesc").textContent=ALGOS[$("algorithm").value].desc; }
+$("algorithm").addEventListener("change", updateAlgoDesc);
 
 /* ---------------- shared canvas helpers ---------------- */
 function setupCanvas(cv, cssHeight){
@@ -284,13 +393,117 @@ function setupCanvas(cv, cssHeight){
   return {ctx, w, h:cssHeight};
 }
 
+/* ---------------- interactive disk map ----------------
+   A horizontal track of all cylinders. Click empty track to add a
+   request, click a dot to remove it, drag the head marker to set
+   the initial head position. Two-way sync with the input fields.  */
+const disk={pts:[], headX:0, dragging:false, maxCyl:199, head:53, trackY:52, h:110};
+
+function parseQueueLoose(maxCyl){
+  return $("queue").value.split(/[\s,]+/).filter(s=>s.length).map(Number)
+    .filter(r=>Number.isInteger(r)&&r>=0&&r<=maxCyl);
+}
+
+function drawStrip(){
+  const cv=$("diskCanvas");
+  const maxCyl=parseInt($("diskSize").value,10);
+  const head=parseInt($("headStart").value,10);
+  if(!Number.isInteger(maxCyl)||maxCyl<10||!Number.isInteger(head)) return;
+  disk.maxCyl=maxCyl; disk.head=Math.max(0,Math.min(maxCyl,head));
+  const reqs=parseQueueLoose(maxCyl);
+  const {ctx,w,h}=setupCanvas(cv, disk.h);
+  const padL=36, padR=36, trackY=disk.trackY;
+  const X=c=>padL+(c/maxCyl)*(w-padL-padR);
+  disk.X=X; disk.w=w;
+
+  // track
+  ctx.strokeStyle="#3d444f"; ctx.lineWidth=6; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(padL,trackY); ctx.lineTo(w-padR,trackY); ctx.stroke();
+
+  // ticks + end labels
+  ctx.fillStyle="#8b949e"; ctx.font="10px Consolas,monospace"; ctx.textAlign="center";
+  ctx.strokeStyle="#2d333f"; ctx.lineWidth=1;
+  for(let i=0;i<=10;i++){
+    const c=Math.round(maxCyl*i/10), x=X(c);
+    ctx.beginPath(); ctx.moveTo(x,trackY-8); ctx.lineTo(x,trackY+8); ctx.stroke();
+    if(i%5===0) ctx.fillText(c, x, trackY+22);
+  }
+
+  // request dots, labels staggered above the track (sorted so neighbours alternate height)
+  disk.pts=[];
+  const sorted=[...reqs].sort((a,b)=>a-b);
+  reqs.forEach(r=>{
+    const x=X(r);
+    disk.pts.push({x, y:trackY, cyl:r});
+    ctx.fillStyle='#58a6ff';
+    ctx.beginPath(); ctx.arc(x,trackY,6,0,7); ctx.fill();
+    ctx.fillStyle='#8b949e'; ctx.font='10px Consolas,monospace';
+    ctx.fillText(''+r, x, trackY-(sorted.indexOf(r)%2?16:28));
+  });
+
+  // head marker below the track
+  const hx=X(disk.head);
+  disk.headX=hx;
+  ctx.fillStyle="#3fb950";
+  ctx.beginPath();
+  ctx.moveTo(hx,trackY+12); ctx.lineTo(hx-8,trackY+26); ctx.lineTo(hx+8,trackY+26);
+  ctx.closePath(); ctx.fill();
+  ctx.font="bold 11px Consolas,monospace";
+  ctx.fillText("HEAD "+disk.head, Math.max(padL,Math.min(w-padR,hx)), trackY+42);
+}
+
+function syncQueue(reqs){ $("queue").value=reqs.join(", "); drawStrip(); }
+
+function diskPos(ev){
+  const r=$("diskCanvas").getBoundingClientRect();
+  return {x:ev.clientX-r.left, y:ev.clientY-r.top};
+}
+
+$("diskCanvas").addEventListener("pointerdown", ev=>{
+  const p=diskPos(ev);
+  // near the head marker (below the track) -> start dragging
+  if(Math.abs(p.x-disk.headX)<18 && p.y>disk.trackY+6){ disk.dragging=true; try{$("diskCanvas").setPointerCapture(ev.pointerId);}catch(e){} return; }
+  // near a request dot -> remove it
+  const hit=disk.pts.find(pt=>Math.hypot(pt.x-p.x, pt.y-p.y)<14);
+  const maxCyl=disk.maxCyl;
+  const reqs=parseQueueLoose(maxCyl);
+  if(hit){
+    const i=reqs.indexOf(hit.cyl);
+    if(i>=0){ reqs.splice(i,1); syncQueue(reqs); }
+    return;
+  }
+  // otherwise -> add a request at the clicked cylinder
+  const padL=36, padR=36;
+  const c=Math.round((p.x-padL)/(disk.w-padL-padR)*maxCyl);
+  if(c<0||c>maxCyl) return;
+  if(!reqs.includes(c)){ reqs.push(c); syncQueue(reqs); }
+});
+$("diskCanvas").addEventListener("pointermove", ev=>{
+  if(!disk.dragging) return;
+  const p=diskPos(ev), padL=36, padR=36;
+  const c=Math.round((p.x-padL)/(disk.w-padL-padR)*disk.maxCyl);
+  $("headStart").value=Math.max(0,Math.min(disk.maxCyl,c));
+  drawStrip();
+});
+$("diskCanvas").addEventListener("pointerup", ()=>{ disk.dragging=false; });
+
+["queue","headStart","diskSize"].forEach(id=>$(id).addEventListener("input", drawStrip));
+
 /* ---------------- single-algorithm simulation view ---------------- */
-const sim={seq:null, color:"#58a6ff", maxCyl:199, seg:0, frac:0, playing:false, raf:null, reqs:[]};
+const sim={seq:null, color:"#58a6ff", maxCyl:199, seg:0, frac:0, playing:false, raf:null, reqs:[], dir:"left", points:[], lastM:-1};
 
 function cylX(c,g){ return g.padL + (c/sim.maxCyl)*(g.w-g.padL-g.padR); }
 function stepY(i,n,g){ return g.padT + (i/Math.max(n-1,1))*(g.h-g.padT-g.padB); }
 
 function geom(){ return {padL:56, padR:24, padT:26, padB:34}; }
+
+/* which move (1..n-1) is currently being made / was just made */
+function currentMove(){
+  const n=sim.seq.length;
+  if(n<2) return 0;
+  if(sim.playing||sim.frac>0) return Math.min(sim.seg+1, n-1);
+  return Math.max(sim.seg, 1);
+}
 
 function drawSim(){
   const cv=$("simCanvas");
@@ -301,9 +514,12 @@ function drawSim(){
   // grid
   ctx.strokeStyle="#2d333f"; ctx.fillStyle="#8b949e";
   ctx.lineWidth=1; ctx.font="11px Consolas,monospace"; ctx.textAlign="center";
-  const ticks=10;
-  for(let i=0;i<=ticks;i++){
-    const c=Math.round(sim.maxCyl*i/ticks), x=cylX(c,g);
+  const step=Math.max(1, Math.ceil(sim.maxCyl/10/5)*5);
+  const tickVals=[];
+  for(let c=0;c<sim.maxCyl;c+=step) tickVals.push(c);
+  tickVals.push(sim.maxCyl);
+  for(const c of tickVals){
+    const x=cylX(c,g);
     ctx.beginPath(); ctx.moveTo(x,g.padT); ctx.lineTo(x,h-g.padB); ctx.stroke();
     ctx.fillText(c, x, h-g.padB+16);
   }
@@ -327,7 +543,6 @@ function drawSim(){
   }
 
   // completed portion of the path
-  const done=sim.seg+sim.frac;
   ctx.strokeStyle=sim.color; ctx.lineWidth=3;
   ctx.beginPath();
   for(let i=0;i<=sim.seg && i<n;i++){
@@ -343,10 +558,13 @@ function drawSim(){
   }else{ hx=cylX(seq[n-1],g); hy=stepY(n-1,n,g); }
   ctx.stroke();
 
-  // served points
+  // served points (also stored for hover/click hit-testing)
+  sim.points=[];
   ctx.fillStyle=sim.color;
-  for(let i=0;i<=sim.seg && i<n;i++){
-    ctx.beginPath(); ctx.arc(cylX(seq[i],g), stepY(i,n,g), 4, 0, 7); ctx.fill();
+  for(let i=0;i<n;i++){
+    const x=cylX(seq[i],g), y=stepY(i,n,g);
+    sim.points.push({x,y,i,c:seq[i]});
+    if(i<=sim.seg){ ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill(); }
   }
 
   // head marker
@@ -361,6 +579,26 @@ function drawSim(){
   ctx.fillText("head @ "+curCyl, Math.min(hx+12, w-90), hy-10);
 
   $("statCur").textContent=curCyl;
+
+  // scrubber
+  const sc=$("scrub");
+  sc.max=n-1; sc.value=sim.seg;
+  $("scrubLabel").textContent=sim.seg+" / "+(n-1);
+
+  // narration + trace highlight
+  const m=currentMove();
+  if(m>=1 && m<=n-1){
+    $("whyLine").textContent=narrate($("algorithm").value, sim.reqs, seq, sim.maxCyl, m-1, sim.dir);
+    const tb=$("traceTable").querySelector("tbody");
+    const cur=tb.querySelector("tr.current");
+    if(cur) cur.classList.remove("current");
+    const row=tb.querySelector('tr[data-move="'+m+'"]');
+    if(row){
+      row.classList.add("current");
+      if(sim.playing && m!==sim.lastM) row.scrollIntoView({block:"nearest"});
+    }
+    sim.lastM=m;
+  }
 }
 
 function simTick(){
@@ -389,13 +627,36 @@ $("playBtn").onclick=()=>{
 $("restartBtn").onclick=()=>{ sim.seg=0; sim.frac=0; setPlaying(true); drawSim(); };
 $("nextBtn").onclick=()=>{ setPlaying(false); if(sim.seg<sim.seq.length-1){sim.seg++; sim.frac=0;} drawSim(); };
 $("prevBtn").onclick=()=>{ setPlaying(false); if(sim.seg>0){sim.seg--; sim.frac=0;} drawSim(); };
+$("scrub").addEventListener("input", ()=>{
+  setPlaying(false);
+  sim.seg=Math.max(0,Math.min(sim.seq.length-1, parseInt($("scrub").value,10)||0));
+  sim.frac=0; drawSim();
+});
 
-$("runBtn").onclick=()=>{
+/* ---------------- run one algorithm ---------------- */
+function buildTrace(seq){
+  const tb=$("traceTable").querySelector("tbody");
+  tb.innerHTML="";
+  let run=0;
+  for(let i=1;i<seq.length;i++){
+    const d=Math.abs(seq[i]-seq[i-1]);
+    run+=d;
+    const tr=document.createElement("tr");
+    tr.className="clickable";
+    tr.dataset.move=i;
+    tr.innerHTML="<td>"+i+"</td><td>"+seq[i-1]+"</td><td>"+seq[i]+"</td>"+
+                 "<td class='num'>"+d+"</td><td class='num'>"+run+"</td>";
+    tr.onclick=()=>{ setPlaying(false); sim.seg=i; sim.frac=0; drawSim(); };
+    tb.appendChild(tr);
+  }
+}
+
+function runAlgorithm(name){
   const inp=readInputs(); if(!inp) return;
-  const name=$("algorithm").value;
   const {seq,total}=ALGOS[name].fn(inp.reqs, inp.head, inp.maxCyl, inp.dir);
-  sim.seq=seq; sim.maxCyl=inp.maxCyl; sim.reqs=inp.reqs; sim.color=ALGOS[name].color;
-  sim.seg=0; sim.frac=0;
+  sim.seq=seq; sim.maxCyl=inp.maxCyl; sim.reqs=inp.reqs; sim.color=ALGOS[name].color; sim.dir=inp.dir;
+  sim.seg=0; sim.frac=0; sim.lastM=-1;
+  $("algorithm").value=name; updateAlgoDesc();
   $("simCard").style.display="block";
   $("cmpCard").style.display="none";
   $("simTitle").textContent=name+" simulation";
@@ -403,10 +664,48 @@ $("runBtn").onclick=()=>{
   $("statReq").textContent=inp.reqs.length;
   $("statAvg").textContent=(total/inp.reqs.length).toFixed(2)+" cylinders";
   $("seqLine").innerHTML="<b>Seek order:</b> "+seq.join(" &rarr; ");
+  $("whyLine").textContent="Press play and watch why the head moves the way it does.";
+  buildTrace(seq);
   drawSim();
   $("simCard").scrollIntoView({behavior:"smooth", block:"nearest"});
   setPlaying(true);
-};
+}
+
+$("runBtn").onclick=()=>runAlgorithm($("algorithm").value);
+
+/* hover a plotted point -> tooltip; click it -> jump the animation there */
+$("simCanvas").addEventListener("mousemove", ev=>{
+  if(!sim.seq||!sim.points.length) return;
+  const r=$("simCanvas").getBoundingClientRect();
+  const x=ev.clientX-r.left, y=ev.clientY-r.top;
+  const hit=sim.points.find(p=>Math.hypot(p.x-x,p.y-y)<10);
+  const tip=$("simTip");
+  if(hit){
+    tip.style.display="block";
+    tip.style.left=Math.min(x+14, r.width-180)+"px";
+    tip.style.top=Math.max(y-30,0)+"px";
+    tip.textContent= hit.i===0 ? "start: cylinder "+hit.c
+      : "step "+hit.i+": cylinder "+hit.c+" (+"+Math.abs(sim.seq[hit.i]-sim.seq[hit.i-1])+")";
+  }else tip.style.display="none";
+});
+$("simCanvas").addEventListener("mouseleave", ()=>{ $("simTip").style.display="none"; });
+$("simCanvas").addEventListener("click", ev=>{
+  if(!sim.seq||!sim.points.length) return;
+  const r=$("simCanvas").getBoundingClientRect();
+  const x=ev.clientX-r.left, y=ev.clientY-r.top;
+  const hit=sim.points.find(p=>Math.hypot(p.x-x,p.y-y)<10);
+  if(hit){ setPlaying(false); sim.seg=hit.i; sim.frac=0; drawSim(); }
+});
+
+/* keyboard shortcuts while the simulation is open */
+document.addEventListener("keydown", ev=>{
+  if($("simCard").style.display==="none"||!sim.seq) return;
+  const t=ev.target;
+  if(t && (t.tagName==="INPUT"||t.tagName==="SELECT"||t.tagName==="TEXTAREA")) return;
+  if(ev.code==="Space"){ ev.preventDefault(); $("playBtn").onclick(); }
+  else if(ev.key==="ArrowRight") $("nextBtn").onclick();
+  else if(ev.key==="ArrowLeft") $("prevBtn").onclick();
+});
 
 /* ---------------- comparison view ---------------- */
 $("compareBtn").onclick=()=>{
@@ -448,18 +747,22 @@ $("compareBtn").onclick=()=>{
   for(const r of rows){
     const tr=document.createElement("tr");
     if(r.total===best) tr.className="best";
+    tr.classList.add("clickable");
+    tr.title="Click to watch "+r.name+" run";
     tr.innerHTML=
       "<td><span class='algoswatch' style='background:"+r.color+"'></span>"+r.name+"</td>"+
       "<td style='font-family:Consolas,monospace;font-size:.78rem;'>"+r.seq.join(" &rarr; ")+"</td>"+
       "<td class='num'>"+r.total+"</td>"+
       "<td class='num'>"+r.avg.toFixed(2)+"</td>";
+    tr.onclick=()=>runAlgorithm(r.name);
     tb.appendChild(tr);
   }
   $("cmpCard").scrollIntoView({behavior:"smooth", block:"nearest"});
 };
 
 window.addEventListener("resize", ()=>{
-  if($("simCard").style.display!=="none") drawSim();
+  drawStrip();
+  if($("simCard").style.display!=="none"&&sim.seq) drawSim();
   else if($("cmpCard").style.display!=="none") $("compareBtn").onclick();
 });
 
@@ -469,9 +772,10 @@ window.addEventListener("resize", ()=>{
 (function(){
   const h=new URLSearchParams(location.hash.slice(1));
   const demo=h.get("demo");
+  updateAlgoDesc();
+  drawStrip();
   if(!demo) return;
-  const oldRandom=$("randomBtn").onclick;
-  if(!h.get("q")) oldRandom();           // randomise unless a queue is supplied
+  if(!h.get("q")) $("randomBtn").onclick(); // randomise unless a queue is supplied
   if(h.get("q")) $("queue").value=h.get("q");
   if(h.get("algo")) $("algorithm").value=h.get("algo");
   if(demo==="compare"){ $("compareBtn").onclick(); }
