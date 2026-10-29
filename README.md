@@ -95,12 +95,30 @@ For the queue `98, 183, 37, 122, 14, 124, 65, 67` with head at `53`
 
 *C-SCAN / C-LOOK include the return sweep to the far end, the standard textbook convention.*
 
+## Tests
+
+The algorithm logic is covered by a zero-dependency unit test suite (Node 18+):
+
+```cmd
+node tests.js
+```
+
+The suite checks every algorithm against the classic Silberschatz worked
+example (totals and exact service orders), verifies that every request is
+served exactly once, covers edge cases (empty queue, requests at the disk
+ends, duplicate requests) and smoke-tests the narration text. It extracts the
+algorithm code straight out of `index.html`, so it always tests the exact
+code the browser runs. The same tests run automatically on every push via
+GitHub Actions (`.github/workflows/tests.yml`).
+
 ## Project structure
 
 ```
 disk-scheduling-simulator/
-  index.html   - the whole simulator (markup, styles and logic in one file)
-  README.md    - this file
+  index.html                  - the whole simulator (markup, styles and logic in one file)
+  tests.js                    - unit tests for the algorithms (node tests.js)
+  .github/workflows/tests.yml - CI: runs the tests on every push
+  README.md                   - this file
 ```
 
-No build step, no dependencies.
+No build step, no runtime dependencies.
