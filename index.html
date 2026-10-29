@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disk Scheduling Simulator</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#2d333f;
+    --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --accent2:#3fb950;
+    --warn:#d29922; --danger:#f85149;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    min-height:100vh; padding:24px 16px 60px;
+  }
+  .wrap{max-width:1080px; margin:0 auto;}
+  header{text-align:center; margin-bottom:26px;}
+  header h1{font-size:1.9rem; letter-spacing:.5px;}
+  header h1 span{color:var(--accent);}
+  header p{color:var(--muted); margin-top:6px; font-size:.95rem;}
+  .card{
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:20px; margin-bottom:20px;
+  }
+  .card h2{font-size:1.05rem; margin-bottom:14px; color:var(--accent); text-transform:uppercase; letter-spacing:1px;}
+  .controls{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;}
+  .field label{display:block; font-size:.8rem; color:var(--muted); margin-bottom:5px;}
+  .field input,.field select{
+    width:100%; padding:9px 10px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:.92rem; outline:none;
+  }
+  .field input:focus,.field select:focus{border-color:var(--accent);}
+  .queue-field{grid-column:1/-1;}
+  .btns{display:flex; flex-wrap:wrap; gap:10px; margin-top:16px;}
+  button{
+    padding:10px 20px; border-radius:8px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); font-size:.92rem; cursor:pointer;
+    transition:background .15s,border-color .15s;
+  }
+  button:hover{border-color:var(--accent);}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#0d1117; font-weight:600;}
+  button.primary:hover{filter:brightness(1.12);}
+  button.green{background:var(--accent2); border-color:var(--accent2); color:#0d1117; font-weight:600;}
+  button.green:hover{filter:brightness(1.12);}
+  button:disabled{opacity:.45; cursor:default;}
+  canvas{width:100%; display:block; border-radius:8px; background:var(--panel2);}
+  .playback{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px;}
+  .playback .spd{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.82rem;}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-top:16px;}
+  .stat{background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px 14px;}
+  .stat .k{font-size:.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px;}
+  .stat .v{font-size:1.25rem; font-weight:700; margin-top:4px; color:var(--accent);}
+  .seq{
+    margin-top:14px; font-family:'Consolas','Courier New',monospace; font-size:.85rem;
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    padding:12px; overflow-x:auto; white-space:nowrap; color:var(--text);
+  }
+  .seq b{color:var(--warn);}
+  table{width:100%; border-collapse:collapse; margin-top:6px; font-size:.88rem;}
+  th,td{padding:9px 10px; text-align:left; border-bottom:1px solid var(--border);}
+  th{color:var(--muted); font-size:.76rem; text-transform:uppercase; letter-spacing:.6px;}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums;}
+  tr.best td{color:var(--accent2); font-weight:600;}
+  .algoswatch{display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:8px;}
+  .err{color:var(--danger); font-size:.85rem; margin-top:10px; display:none;}
+  .hint{color:var(--muted); font-size:.8rem; margin-top:10px;}
+  footer{text-align:center; color:var(--muted); font-size:.8rem; margin-top:28px;}
+  @media (max-width:600px){ header h1{font-size:1.4rem;} .card{padding:14px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Disk Scheduling <span>Simulator</span></h1>
+    <p>Visualise and compare FCFS, SSTF, SCAN, C-SCAN, LOOK and C-LOOK disk scheduling algorithms</p>
+  </header>
+
+  <div class="card">
+    <h2>Configuration</h2>
+    <div class="controls">
+      <div class="field">
+        <label>Disk size (cylinders 0 to max)</label>
+        <input id="diskSize" type="number" min="10" max="9999" value="199">
+      </div>
+      <div class="field">
+        <label>Initial head position</label>
+        <input id="headStart" type="number" min="0" value="53">
+      </div>
+      <div class="field">
+        <label>Initial direction (SCAN / LOOK family)</label>
+        <select id="direction">
+          <option value="right">Right (towards higher cylinders)</option>
+          <option value="left">Left (towards cylinder 0)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Algorithm</label>
+        <select id="algorithm">
+          <option>FCFS</option>
+          <option>SSTF</option>
+          <option>SCAN</option>
+          <option>C-SCAN</option>
+          <option>LOOK</option>
+          <option>C-LOOK</option>
+        </select>
+      </div>
+      <div class="field queue-field">
+        <label>Request queue (comma or space separated cylinder numbers)</label>
+        <input id="queue" type="text" value="98, 183, 37, 122, 14, 124, 65, 67" spellcheck="false">
+      </div>
+    </div>
+    <div class="btns">
+      <button id="randomBtn">Random queue</button>
+      <button id="runBtn" class="primary">Run algorithm</button>
+      <button id="compareBtn" class="green">Compare all algorithms</button>
+    </div>
+    <div class="err" id="errMsg"></div>
+    <div class="hint">Tip: the graph plots cylinder number (x-axis) against service order (y-axis), exactly like the textbook diagrams.</div>
+  </div>
+
+  <div class="card" id="simCard" style="display:none;">
+    <h2 id="simTitle">Simulation</h2>
+    <canvas id="simCanvas" height="380"></canvas>
+    <div class="playback">
+      <button id="playBtn">Pause</button>
+      <button id="prevBtn">&larr; Step</button>
+      <button id="nextBtn">Step &rarr;</button>
+      <button id="restartBtn">Restart</button>
+      <div class="spd">Speed <input id="speed" type="range" min="1" max="10" value="4"></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Total head movement</div><div class="v" id="statTotal">-</div></div>
+      <div class="stat"><div class="k">Requests served</div><div class="v" id="statReq">-</div></div>
+      <div class="stat"><div class="k">Average seek length</div><div class="v" id="statAvg">-</div></div>
+      <div class="stat"><div class="k">Current cylinder</div><div class="v" id="statCur">-</div></div>
+    </div>
+    <div class="seq" id="seqLine"></div>
+  </div>
+
+  <div class="card" id="cmpCard" style="display:none;">
+    <h2>Algorithm comparison</h2>
+    <canvas id="cmpCanvas" height="320"></canvas>
+    <div style="overflow-x:auto;">
+    <table id="cmpTable">
+      <thead>
+        <tr><th>Algorithm</th><th>Service order</th><th class="num">Total head movement</th><th class="num">Average seek</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    </div>
+    <div class="hint">Green row = lowest total head movement for this queue. C-SCAN / C-LOOK counts the return sweep to the far end as movement, as in the standard textbook convention.</div>
+  </div>
+
+  <footer>Operating Systems mini project &middot; Disk Scheduling Simulator</footer>
+</div>
+
+<script>
+"use strict";
+
+/* ---------------- disk scheduling algorithms ----------------
+   Each returns { seq:[...], total:number }.
+   seq always starts at the initial head position; every later
+   entry is a cylinder the head moves to (a request or, for the
+   SCAN family, a disk end).                                   */
+
+function fcfs(reqs, head){
+  const seq=[head,...reqs];
+  return {seq, total:movement(seq)};
+}
+
+function sstf(reqs, head){
+  const pending=[...reqs], seq=[head];
+  let cur=head;
+  while(pending.length){
+    let bi=0;
+    for(let i=1;i<pending.length;i++)
+      if(Math.abs(pending[i]-cur)<Math.abs(pending[bi]-cur)) bi=i;
+    cur=pending.splice(bi,1)[0];
+    seq.push(cur);
+  }
+  return {seq, total:movement(seq)};
+}
+
+function scan(reqs, head, maxCyl, dir){
+  const left=reqs.filter(r=>r<head).sort((a,b)=>b-a);   // descending
+  const right=reqs.filter(r=>r>=head).sort((a,b)=>a-b); // ascending
+  let seq;
+  if(dir==="right"){
+    seq=[head,...right];
+    if(left.length){ seq.push(maxCyl, ...left); }       // sweep to the top end, then back
+    else if(right.length){ seq.push(maxCyl); }
+  }else{
+    seq=[head,...left];
+    if(right.length){ seq.push(0, ...right); }          // sweep to cylinder 0, then back
+    else if(left.length){ seq.push(0); }
+  }
+  return {seq, total:movement(seq)};
+}
+
+function cscan(reqs, head, maxCyl, dir){
+  const left=reqs.filter(r=>r<head).sort((a,b)=>a-b);   // ascending
+  const right=reqs.filter(r=>r>=head).sort((a,b)=>a-b);
+  let seq;
+  if(dir==="right"){
+    seq=[head,...right];
+    if(left.length) seq.push(maxCyl, 0, ...left);       // jump back to 0, keep going right
+  }else{
+    const leftDesc=reqs.filter(r=>r<head).sort((a,b)=>b-a);
+    seq=[head,...leftDesc];
+    if(right.length) seq.push(0, maxCyl, ...right.slice().reverse());
+  }
+  return {seq, total:movement(seq)};
+}
+
+function look(reqs, head, dir){
+  const left=reqs.filter(r=>r<head).sort((a,b)=>b-a);
+  const right=reqs.filter(r=>r>=head).sort((a,b)=>a-b);
+  const seq = dir==="right" ? [head,...right,...left] : [head,...left,...right];
+  return {seq, total:movement(seq)};
+}
+
+function clook(reqs, head, dir){
+  const left=reqs.filter(r=>r<head).sort((a,b)=>a-b);
+  const right=reqs.filter(r=>r>=head).sort((a,b)=>a-b);
+  const seq = dir==="right" ? [head,...right,...left] : [head,...left.slice().reverse(),...right.slice().reverse()];
+  return {seq, total:movement(seq)};
+}
+
+function movement(seq){
+  let t=0;
+  for(let i=1;i<seq.length;i++) t+=Math.abs(seq[i]-seq[i-1]);
+  return t;
+}
+
+const ALGOS={
+  "FCFS":   {fn:(r,h)=>fcfs(r,h),                 color:"#58a6ff"},
+  "SSTF":   {fn:(r,h)=>sstf(r,h),                 color:"#3fb950"},
+  "SCAN":   {fn:(r,h,m,d)=>scan(r,h,m,d),         color:"#d29922"},
+  "C-SCAN": {fn:(r,h,m,d)=>cscan(r,h,m,d),        color:"#f778ba"},
+  "LOOK":   {fn:(r,h,m,d)=>look(r,h,d),           color:"#a371f7"},
+  "C-LOOK": {fn:(r,h,m,d)=>clook(r,h,d),          color:"#ffa657"},
+};
+
+/* ---------------- input handling ---------------- */
+const $=id=>document.getElementById(id);
+
+function readInputs(){
+  const maxCyl=parseInt($("diskSize").value,10);
+  const head=parseInt($("headStart").value,10);
+  const dir=$("direction").value;
+  const raw=$("queue").value;
+  const reqs=raw.split(/[\s,]+/).filter(s=>s.length).map(Number);
+  const err=m=>{const e=$("errMsg"); e.textContent=m; e.style.display=m?"block":"none";};
+  if(!Number.isInteger(maxCyl)||maxCyl<10) return err("Disk size must be an integer of at least 10."),null;
+  if(!Number.isInteger(head)||head<0||head>maxCyl) return err("Initial head position must be between 0 and "+maxCyl+"."),null;
+  if(!reqs.length) return err("Enter at least one request in the queue."),null;
+  for(const r of reqs){
+    if(!Number.isInteger(r)) return err("Every request must be a whole number."),null;
+    if(r<0||r>maxCyl) return err("Request "+r+" is outside the disk (0 to "+maxCyl+")."),null;
+  }
+  err("");
+  return {reqs, head, maxCyl, dir};
+}
+
+$("randomBtn").onclick=()=>{
+  const maxCyl=parseInt($("diskSize").value,10)||199;
+  const n=8, set=new Set();
+  while(set.size<n) set.add(Math.floor(Math.random()*(maxCyl+1)));
+  $("queue").value=[...set].join(", ");
+  $("headStart").value=Math.floor(Math.random()*(maxCyl+1));
+};
+
+/* ---------------- shared canvas helpers ---------------- */
+function setupCanvas(cv, cssHeight){
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||cv.parentElement.clientWidth;
+  cv.style.height=cssHeight+"px";
+  cv.width=w*dpr; cv.height=cssHeight*dpr;
+  const ctx=cv.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx, w, h:cssHeight};
+}
+
+/* ---------------- single-algorithm simulation view ---------------- */
+const sim={seq:null, color:"#58a6ff", maxCyl:199, seg:0, frac:0, playing:false, raf:null, reqs:[]};
+
+function cylX(c,g){ return g.padL + (c/sim.maxCyl)*(g.w-g.padL-g.padR); }
+function stepY(i,n,g){ return g.padT + (i/Math.max(n-1,1))*(g.h-g.padT-g.padB); }
+
+function geom(){ return {padL:56, padR:24, padT:26, padB:34}; }
+
+function drawSim(){
+  const cv=$("simCanvas");
+  const {ctx,w,h}=setupCanvas(cv, Math.max(320, Math.min(420, window.innerHeight*0.5)));
+  const g=geom(); g.w=w; g.h=h;
+  const seq=sim.seq, n=seq.length;
+
+  // grid
+  ctx.strokeStyle="#2d333f"; ctx.fillStyle="#8b949e";
+  ctx.lineWidth=1; ctx.font="11px Consolas,monospace"; ctx.textAlign="center";
+  const ticks=10;
+  for(let i=0;i<=ticks;i++){
+    const c=Math.round(sim.maxCyl*i/ticks), x=cylX(c,g);
+    ctx.beginPath(); ctx.moveTo(x,g.padT); ctx.lineTo(x,h-g.padB); ctx.stroke();
+    ctx.fillText(c, x, h-g.padB+16);
+  }
+  ctx.textAlign="right";
+  const rows=Math.min(n-1, 12);
+  for(let i=0;i<=rows;i++){
+    const step=Math.round((n-1)*i/rows)||0, y=stepY(step,n,g);
+    ctx.fillText(step===0?"head":"#"+step, g.padL-10, y+4);
+  }
+
+  // full path, faint
+  ctx.strokeStyle=sim.color+"44"; ctx.lineWidth=2;
+  ctx.beginPath();
+  seq.forEach((c,i)=>{ const x=cylX(c,g),y=stepY(i,n,g); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+
+  // pending request markers on the top axis
+  ctx.fillStyle="#8b949e";
+  for(const r of sim.reqs){
+    ctx.beginPath(); ctx.arc(cylX(r,g), g.padT-8, 3, 0, 7); ctx.fill();
+  }
+
+  // completed portion of the path
+  const done=sim.seg+sim.frac;
+  ctx.strokeStyle=sim.color; ctx.lineWidth=3;
+  ctx.beginPath();
+  for(let i=0;i<=sim.seg && i<n;i++){
+    const x=cylX(seq[i],g), y=stepY(i,n,g);
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  let hx,hy;
+  if(sim.seg<n-1){
+    const x1=cylX(seq[sim.seg],g),   y1=stepY(sim.seg,n,g);
+    const x2=cylX(seq[sim.seg+1],g), y2=stepY(sim.seg+1,n,g);
+    hx=x1+(x2-x1)*sim.frac; hy=y1+(y2-y1)*sim.frac;
+    ctx.lineTo(hx,hy);
+  }else{ hx=cylX(seq[n-1],g); hy=stepY(n-1,n,g); }
+  ctx.stroke();
+
+  // served points
+  ctx.fillStyle=sim.color;
+  for(let i=0;i<=sim.seg && i<n;i++){
+    ctx.beginPath(); ctx.arc(cylX(seq[i],g), stepY(i,n,g), 4, 0, 7); ctx.fill();
+  }
+
+  // head marker
+  ctx.fillStyle="#e6edf3";
+  ctx.beginPath(); ctx.arc(hx,hy,7,0,7); ctx.fill();
+  ctx.fillStyle=sim.color;
+  ctx.beginPath(); ctx.arc(hx,hy,4,0,7); ctx.fill();
+  const curCyl = sim.seg<n-1
+    ? Math.round(seq[sim.seg]+(seq[sim.seg+1]-seq[sim.seg])*sim.frac)
+    : seq[n-1];
+  ctx.fillStyle="#e6edf3"; ctx.font="bold 12px Consolas,monospace"; ctx.textAlign="left";
+  ctx.fillText("head @ "+curCyl, Math.min(hx+12, w-90), hy-10);
+
+  $("statCur").textContent=curCyl;
+}
+
+function simTick(){
+  if(!sim.playing) return;
+  const speed=parseInt($("speed").value,10);
+  sim.frac += 0.004*speed + 0.004*speed*(60/sim.seq.length); // scale a little with length
+  if(sim.frac>=1){
+    sim.frac=0; sim.seg++;
+    if(sim.seg>=sim.seq.length-1){ sim.seg=sim.seq.length-1; sim.playing=false; $("playBtn").textContent="Play"; }
+  }
+  drawSim();
+  if(sim.playing) sim.raf=requestAnimationFrame(simTick);
+}
+
+function setPlaying(p){
+  sim.playing=p;
+  $("playBtn").textContent=p?"Pause":"Play";
+  cancelAnimationFrame(sim.raf);
+  if(p) sim.raf=requestAnimationFrame(simTick);
+}
+
+$("playBtn").onclick=()=>{
+  if(sim.seg>=sim.seq.length-1){ sim.seg=0; sim.frac=0; }
+  setPlaying(!sim.playing);
+};
+$("restartBtn").onclick=()=>{ sim.seg=0; sim.frac=0; setPlaying(true); drawSim(); };
+$("nextBtn").onclick=()=>{ setPlaying(false); if(sim.seg<sim.seq.length-1){sim.seg++; sim.frac=0;} drawSim(); };
+$("prevBtn").onclick=()=>{ setPlaying(false); if(sim.seg>0){sim.seg--; sim.frac=0;} drawSim(); };
+
+$("runBtn").onclick=()=>{
+  const inp=readInputs(); if(!inp) return;
+  const name=$("algorithm").value;
+  const {seq,total}=ALGOS[name].fn(inp.reqs, inp.head, inp.maxCyl, inp.dir);
+  sim.seq=seq; sim.maxCyl=inp.maxCyl; sim.reqs=inp.reqs; sim.color=ALGOS[name].color;
+  sim.seg=0; sim.frac=0;
+  $("simCard").style.display="block";
+  $("cmpCard").style.display="none";
+  $("simTitle").textContent=name+" simulation";
+  $("statTotal").textContent=total+" cylinders";
+  $("statReq").textContent=inp.reqs.length;
+  $("statAvg").textContent=(total/inp.reqs.length).toFixed(2)+" cylinders";
+  $("seqLine").innerHTML="<b>Seek order:</b> "+seq.join(" &rarr; ");
+  drawSim();
+  $("simCard").scrollIntoView({behavior:"smooth", block:"nearest"});
+  setPlaying(true);
+};
+
+/* ---------------- comparison view ---------------- */
+$("compareBtn").onclick=()=>{
+  const inp=readInputs(); if(!inp) return;
+  $("simCard").style.display="none";
+  $("cmpCard").style.display="block";
+  const rows=Object.entries(ALGOS).map(([name,a])=>{
+    const {seq,total}=a.fn(inp.reqs, inp.head, inp.maxCyl, inp.dir);
+    return {name, seq, total, avg:total/inp.reqs.length, color:a.color};
+  });
+  const best=Math.min(...rows.map(r=>r.total));
+
+  const cv=$("cmpCanvas");
+  const {ctx,w,h}=setupCanvas(cv, 320);
+  const padL=56,padR=20,padT=20,padB=44;
+  const maxV=Math.max(...rows.map(r=>r.total))*1.12;
+  ctx.strokeStyle="#2d333f"; ctx.fillStyle="#8b949e";
+  ctx.font="11px Consolas,monospace"; ctx.textAlign="right";
+  for(let i=0;i<=4;i++){
+    const v=Math.round(maxV*i/4), y=padT+(1-i/4)*(h-padT-padB);
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(w-padR,y); ctx.stroke();
+    ctx.fillText(v, padL-8, y+4);
+  }
+  const bw=(w-padL-padR)/rows.length;
+  rows.forEach((r,i)=>{
+    const x=padL+i*bw+bw*0.18, bh=(r.total/maxV)*(h-padT-padB), y=h-padB-bh;
+    ctx.fillStyle=r.total===best?"#3fb950":r.color;
+    ctx.beginPath();
+    ctx.roundRect(x,y,bw*0.64,bh,6);
+    ctx.fill();
+    ctx.fillStyle="#e6edf3"; ctx.textAlign="center"; ctx.font="bold 12px Consolas,monospace";
+    ctx.fillText(r.total, x+bw*0.32, y-8);
+    ctx.fillStyle="#8b949e"; ctx.font="12px Consolas,monospace";
+    ctx.fillText(r.name, x+bw*0.32, h-padB+18);
+  });
+
+  const tb=$("cmpTable").querySelector("tbody");
+  tb.innerHTML="";
+  for(const r of rows){
+    const tr=document.createElement("tr");
+    if(r.total===best) tr.className="best";
+    tr.innerHTML=
+      "<td><span class='algoswatch' style='background:"+r.color+"'></span>"+r.name+"</td>"+
+      "<td style='font-family:Consolas,monospace;font-size:.78rem;'>"+r.seq.join(" &rarr; ")+"</td>"+
+      "<td class='num'>"+r.total+"</td>"+
+      "<td class='num'>"+r.avg.toFixed(2)+"</td>";
+    tb.appendChild(tr);
+  }
+  $("cmpCard").scrollIntoView({behavior:"smooth", block:"nearest"});
+};
+
+window.addEventListener("resize", ()=>{
+  if($("simCard").style.display!=="none") drawSim();
+  else if($("cmpCard").style.display!=="none") $("compareBtn").onclick();
+});
+
+/* ---------------- shareable demo hooks ----------------
+   #demo=compare  -> random queue + comparison chart
+   #demo=run&algo=SCAN -> finished single-algorithm run  */
+(function(){
+  const h=new URLSearchParams(location.hash.slice(1));
+  const demo=h.get("demo");
+  if(!demo) return;
+  const oldRandom=$("randomBtn").onclick;
+  if(!h.get("q")) oldRandom();           // randomise unless a queue is supplied
+  if(h.get("q")) $("queue").value=h.get("q");
+  if(h.get("algo")) $("algorithm").value=h.get("algo");
+  if(demo==="compare"){ $("compareBtn").onclick(); }
+  else if(demo==="run"){
+    $("runBtn").onclick();
+    sim.seg=sim.seq.length-1; sim.frac=0; setPlaying(false); drawSim();
+  }
+})();
+</script>
+</body>
+</html>
