@@ -1,7 +1,7 @@
 # Disk Scheduling Simulator
 
 An interactive, browser-based simulator for the classic disk scheduling algorithms
-taught in Operating Systems courses. Build a request queue by clicking on the disk
+used by real operating systems. Build a request queue by clicking on the disk
 map, watch the disk head move across the platter, read a step-by-step explanation of
 every move, and compare all six algorithms on the same queue.
 
@@ -28,7 +28,7 @@ every move, and compare all six algorithms on the same queue.
 - **"Why" narration** - a plain-English sentence explains every move while the
   animation runs ("the closest pending request is 65 - move 2 cylinders left")
 - **Trace table** - every step with from, to, seek distance and running total,
-  exactly the working you write in an exam. Click a row to jump the animation
+  the working you write by hand. Click a row to jump the animation
   to that step; the current row highlights as the head moves
 - Play / pause, step forward / back, a **timeline scrubber**, restart and speed
   control. Keyboard: space = play/pause, arrow keys = step
