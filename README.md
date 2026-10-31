@@ -41,6 +41,8 @@ every move, and compare all six algorithms on the same queue.
   `98, 183, 37, 122, 14, 124, 65, 67` with head at 53
 - Random queue generator, custom queue input, configurable disk size,
   initial head position and sweep direction
+- **Download the trace as CSV** - the same step / from / to / seek / running-total
+  table, ready to paste into a report or spreadsheet
 - Shareable demo links: add `#demo=compare` or `#demo=run&algo=SCAN` to the URL
 - Zero dependencies - plain HTML/CSS/JS, works offline, mobile friendly
 
