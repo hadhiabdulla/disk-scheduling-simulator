@@ -179,6 +179,7 @@
     </table>
     </div>
     <div class="hint">The trace table is exactly what you write in the exam: every move, its seek distance and the running total. Click a row to jump the animation to that step.</div>
+    <div class="btns"><button id="csvBtn">Download trace as CSV</button></div>
   </div>
 
   <div class="card" id="cmpCard" style="display:none;">
@@ -304,6 +305,18 @@ const ALGOS={
   "C-LOOK": {fn:(r,h,m,d)=>clook(r,h,d),          color:"#ffa657",
              desc:"Like C-SCAN, but jumps from the last request straight to the first."},
 };
+
+/* CSV export of the trace table: step, from, to, seek distance, running total.
+   Pure function; used by the "Download trace" button and checked by tests.js. */
+function traceCsv(seq){
+  const rows=["step,from,to,seek_distance,running_total"];
+  let run=0;
+  for(let i=1;i<seq.length;i++){
+    const d=Math.abs(seq[i]-seq[i-1]); run+=d;
+    rows.push(i+","+seq[i-1]+","+seq[i]+","+d+","+run);
+  }
+  return rows.join("\n")+"\n";
+}
 
 /* Plain-English explanation of one head move (transition i: seq[i] -> seq[i+1]).
    Used by the "why" narration line under the simulator. Pure function. */
@@ -672,6 +685,17 @@ function runAlgorithm(name){
 }
 
 $("runBtn").onclick=()=>runAlgorithm($("algorithm").value);
+
+/* export the current trace table as a CSV file */
+$("csvBtn").onclick=()=>{
+  if(!sim.seq||sim.seq.length<2) return;
+  const blob=new Blob([traceCsv(sim.seq)],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="trace-"+$("algorithm").value.toLowerCase().replace(/[^a-z]/g,"")+".csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
 /* hover a plotted point -> tooltip; click it -> jump the animation there */
 $("simCanvas").addEventListener("mousemove", ev=>{
