@@ -22,8 +22,8 @@ if (!block) {
   process.exit(1);
 }
 // Run the extracted block in a fresh function scope and take back what it defines.
-const { fcfs, sstf, scan, cscan, look, clook, movement, narrate, ALGOS } =
-  new Function(block[1] + "\nreturn { fcfs, sstf, scan, cscan, look, clook, movement, narrate, ALGOS };")();
+const { fcfs, sstf, scan, cscan, look, clook, movement, narrate, traceCsv, ALGOS } =
+  new Function(block[1] + "\nreturn { fcfs, sstf, scan, cscan, look, clook, movement, narrate, traceCsv, ALGOS };")();
 
 /* ---------------- tiny test runner ---------------- */
 let passed = 0, failed = 0;
@@ -115,6 +115,27 @@ for (const [name, fn] of Object.entries(runners)) {
 for (const [name, a] of Object.entries(ALGOS)) {
   const r = a.fn(Q, H, M, "left");
   check("ALGOS[" + name + "] runs and returns a number total", typeof r.total === "number" && !Number.isNaN(r.total));
+}
+
+/* ---------------- CSV trace export ---------------- */
+{
+  const seq = fcfs(Q, H).seq;
+  const csv = traceCsv(seq);
+  const lines = csv.split("\n");
+  eq("CSV header", lines[0], "step,from,to,seek_distance,running_total");
+  eq("CSV row count", lines.length - 2, seq.length - 1); // trailing newline leaves a last empty string
+  eq("CSV first row", lines[1], "1,53,98,45,45");
+  eq("CSV last row", lines[seq.length - 1], "8,65,67,2,640");
+  check("CSV ends with a newline", csv.endsWith("\n"));
+  // running totals must match the movement() total for every algorithm
+  for (const [name, fn] of Object.entries(runners)) {
+    const s2 = fn(Q, H).seq;
+    const rows = traceCsv(s2).trim().split("\n").slice(1);
+    eq(name + " CSV final running total", Number(rows[rows.length - 1].split(",")[4]), movement(s2));
+    eq(name + " CSV rows", rows.length, s2.length - 1);
+  }
+  // a queue with no moves gives just the header
+  eq("CSV empty trace", traceCsv([H]), "step,from,to,seek_distance,running_total\n");
 }
 
 /* ---------------- summary ---------------- */
