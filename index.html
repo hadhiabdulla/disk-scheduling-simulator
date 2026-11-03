@@ -179,7 +179,7 @@
     </table>
     </div>
     <div class="hint">The trace table is the working you write by hand: every move, its seek distance and the running total. Click a row to jump the animation to that step.</div>
-    <div class="btns"><button id="csvBtn">Download trace as CSV</button></div>
+    <div class="btns"><button id="csvBtn">Download trace as CSV</button><button id="pngBtn">Download graph as PNG</button></div>
   </div>
 
   <div class="card" id="cmpCard" style="display:none;">
@@ -695,6 +695,24 @@ $("csvBtn").onclick=()=>{
   a.download="trace-"+$("algorithm").value.toLowerCase().replace(/[^a-z]/g,"")+".csv";
   a.click();
   URL.revokeObjectURL(a.href);
+};
+
+/* export the plotted head-movement graph as a PNG (solid panel background) */
+$("pngBtn").onclick=()=>{
+  const src=$("simCanvas");
+  if(!sim.seq||sim.seq.length<2) return;
+  const out=document.createElement("canvas");
+  out.width=src.width; out.height=src.height;
+  const c=out.getContext("2d");
+  c.fillStyle="#161b22"; c.fillRect(0,0,out.width,out.height);
+  c.drawImage(src,0,0);
+  out.toBlob(b=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    a.download="graph-"+$("algorithm").value.toLowerCase().replace(/[^a-z]/g,"")+".png";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 };
 
 /* hover a plotted point -> tooltip; click it -> jump the animation there */
