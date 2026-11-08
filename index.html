@@ -194,6 +194,7 @@
     </table>
     </div>
     <div class="hint">Green row = lowest total head movement for this queue. Click any row to watch that algorithm run. C-SCAN / C-LOOK counts the return sweep to the far end as movement, as in the standard textbook convention.</div>
+    <div class="btns"><button id="cmpCsvBtn">Download table as CSV</button><button id="cmpPngBtn">Download chart as PNG</button></div>
   </div>
 
   <footer>Disk Scheduling Simulator &middot; interactive visualisation of six classic algorithms</footer>
@@ -749,6 +750,8 @@ document.addEventListener("keydown", ev=>{
   else if(ev.key==="ArrowLeft") $("prevBtn").onclick();
 });
 
+let cmpRows=[];
+
 /* ---------------- comparison view ---------------- */
 $("compareBtn").onclick=()=>{
   const inp=readInputs(); if(!inp) return;
@@ -758,6 +761,7 @@ $("compareBtn").onclick=()=>{
     const {seq,total}=a.fn(inp.reqs, inp.head, inp.maxCyl, inp.dir);
     return {name, seq, total, avg:total/inp.reqs.length, color:a.color};
   });
+  cmpRows=rows;
   const best=Math.min(...rows.map(r=>r.total));
 
   const cv=$("cmpCanvas");
@@ -800,6 +804,32 @@ $("compareBtn").onclick=()=>{
     tb.appendChild(tr);
   }
   $("cmpCard").scrollIntoView({behavior:"smooth", block:"nearest"});
+};
+
+/* export the comparison table and chart, mirroring the single-run exports */
+$("cmpCsvBtn").onclick=()=>{
+  if(!cmpRows.length) return;
+  const head="algorithm,service_order,total_head_movement,average_seek";
+  const body=cmpRows.map(r=>r.name+',"'+r.seq.join(" ")+'",'+r.total+","+r.avg.toFixed(2)).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([head+"\n"+body+"\n"],{type:"text/csv"}));
+  a.download="comparison.csv"; a.click(); URL.revokeObjectURL(a.href);
+};
+$("cmpPngBtn").onclick=()=>{
+  const src=$("cmpCanvas");
+  if(!cmpRows.length) return;
+  const out=document.createElement("canvas");
+  out.width=src.width; out.height=src.height;
+  const c=out.getContext("2d");
+  c.fillStyle="#161b22"; c.fillRect(0,0,out.width,out.height);
+  c.drawImage(src,0,0);
+  out.toBlob(b=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    a.download="comparison.png";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 };
 
 window.addEventListener("resize", ()=>{
