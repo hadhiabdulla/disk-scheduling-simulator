@@ -45,6 +45,8 @@ every move, and compare all six algorithms on the same queue.
   background, ready to drop into a document or slide
 - **Download the trace as CSV** - the same step / from / to / seek / running-total
   table, ready to paste into a report or spreadsheet
+- **Download the comparison as PNG or CSV** - the six-algorithm chart and its
+  service-order / total / average-seek table, from the comparison view
 - Shareable demo links: add `#demo=compare` or `#demo=run&algo=SCAN` to the URL
 - Zero dependencies - plain HTML/CSS/JS, works offline, mobile friendly
 
