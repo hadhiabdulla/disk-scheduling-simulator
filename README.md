@@ -47,6 +47,9 @@ every move, and compare all six algorithms on the same queue.
   table, ready to paste into a report or spreadsheet
 - **Download the comparison as PNG or CSV** - the six-algorithm chart and its
   service-order / total / average-seek table, from the comparison view
+- **Copy share link** - the full setup (queue, head position, disk size,
+  sweep direction, algorithm and which view is open) travels in the URL, so a
+  shared link reopens the exact same run or comparison for someone else
 - Shareable demo links: add `#demo=compare` or `#demo=run&algo=SCAN` to the URL
 - Zero dependencies - plain HTML/CSS/JS, works offline, mobile friendly
 
