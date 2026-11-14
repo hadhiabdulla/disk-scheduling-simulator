@@ -138,6 +138,25 @@ for (const [name, a] of Object.entries(ALGOS)) {
   eq("CSV empty trace", traceCsv([H]), "step,from,to,seek_distance,running_total\n");
 }
 
+/* ---------------- share links ---------------- */
+{
+  check("share button present", html.includes('id="shareBtn"'));
+  check("shareURL builder present", html.includes("function shareURL()"));
+  // every piece of the setup must travel in the hash
+  for (const k of ['p.set("q"', 'p.set("head"', 'p.set("size"', 'p.set("dir"', 'p.set("algo"', 'p.set("view"']) {
+    check("shareURL carries " + k, html.includes(k));
+  }
+  check("view distinguishes the comparison card", html.includes('"compare":"run"'));
+  // startup restores the shared fields and honours the view
+  for (const k of ['h.get("q")', 'h.get("head")', 'h.get("size")', 'h.get("dir")', 'h.get("algo")', 'h.get("view")']) {
+    check("startup restores " + k, html.includes(k));
+  }
+  check("clipboard fallback present", html.includes('execCommand("copy")'));
+  check("copied confirmation shown", html.includes("Link copied"));
+  // the original #demo= links keep working
+  check("demo hook kept", html.includes('h.get("demo")'));
+}
+
 /* ---------------- summary ---------------- */
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
