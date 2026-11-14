@@ -141,6 +141,7 @@
       <button id="randomBtn">Random queue</button>
       <button id="runBtn" class="primary">Run algorithm</button>
       <button id="compareBtn" class="green">Compare all algorithms</button>
+      <button id="shareBtn">Copy share link</button>
     </div>
     <div class="err" id="errMsg"></div>
     <div class="hint">Tip: the graph plots cylinder number (x-axis) against service order (y-axis), exactly like the textbook diagrams. Hover any point to inspect it, click it to jump there. Keyboard: space = play/pause, arrow keys = step.</div>
@@ -838,6 +839,35 @@ window.addEventListener("resize", ()=>{
   else if($("cmpCard").style.display!=="none") $("compareBtn").onclick();
 });
 
+/* ---------------- shareable links ----------------
+   The whole current setup travels in the URL hash
+   (#q=..&head=..&size=..&dir=..&algo=..&view=run|compare), so a copied
+   link reopens the exact same run or comparison for someone else. */
+function shareURL(){
+  const p=new URLSearchParams();
+  p.set("q",$("queue").value);
+  p.set("head",$("headStart").value);
+  p.set("size",$("diskSize").value);
+  p.set("dir",$("direction").value);
+  p.set("algo",$("algorithm").value);
+  p.set("view",$("cmpCard").style.display!=="none"?"compare":"run");
+  return location.origin+location.pathname+"#"+p.toString();
+}
+$("shareBtn").onclick=async()=>{
+  const u=shareURL();
+  let ok=false;
+  try{ await navigator.clipboard.writeText(u); ok=true; }
+  catch(e){
+    const t=document.createElement("textarea");
+    t.value=u; document.body.appendChild(t); t.select();
+    try{ ok=document.execCommand("copy"); }catch(_){}
+    t.remove();
+  }
+  const b=$("shareBtn"), label=b.textContent;
+  b.textContent=ok?"Link copied \u2713":"Copy failed - select the URL bar";
+  setTimeout(()=>{ b.textContent=label; },1600);
+};
+
 /* ---------------- shareable demo hooks ----------------
    #demo=compare  -> random queue + comparison chart
    #demo=run&algo=SCAN -> finished single-algorithm run  */
@@ -846,14 +876,22 @@ window.addEventListener("resize", ()=>{
   const demo=h.get("demo");
   updateAlgoDesc();
   drawStrip();
-  if(!demo) return;
-  if(!h.get("q")) $("randomBtn").onclick(); // randomise unless a queue is supplied
+  if(!demo&&!h.get("q")) return;
+  if(demo&&!h.get("q")) $("randomBtn").onclick(); // randomise unless a queue is supplied
   if(h.get("q")) $("queue").value=h.get("q");
+  if(h.get("head")) $("headStart").value=h.get("head");
+  if(h.get("size")) $("diskSize").value=h.get("size");
+  if(h.get("dir")) $("direction").value=h.get("dir");
   if(h.get("algo")) $("algorithm").value=h.get("algo");
-  if(demo==="compare"){ $("compareBtn").onclick(); }
-  else if(demo==="run"){
+  updateAlgoDesc();
+  drawStrip();
+  const view=demo==="compare"||h.get("view")==="compare"?"compare"
+            :(demo==="run"||h.get("view")==="run"?"run":null);
+  if(!view) return;
+  if(view==="compare"){ $("compareBtn").onclick(); }
+  else{
     $("runBtn").onclick();
-    sim.seg=sim.seq.length-1; sim.frac=0; setPlaying(false); drawSim();
+    if(sim.seq){ sim.seg=sim.seq.length-1; sim.frac=0; setPlaying(false); drawSim(); }
   }
 })();
 </script>
